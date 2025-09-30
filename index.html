@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
-<head>
+<head> 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#ef4444"> 
@@ -115,13 +115,12 @@
                     <div>
                         <label for="password" class="block text-sm font-medium text-gray-700">Contraseña</label>
                         <input type="password" id="password" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-red-500 focus:border-red-500" required>
-                      </div>
-                      <div class="text-right">
+                    </div>
+                  <div class="text-right">
     <button type="button" id="forgot-password-btn" class="text-sm text-blue-600 hover:underline focus:outline-none">
         ¿Olvidaste tu contraseña?
     </button>
 </div>
-                    
                 </div>
                 <p id="login-error" class="text-red-500 text-sm mt-2 hidden">Correo o contraseña incorrectos.</p>
                 <div class="mt-6 space-y-3">
@@ -349,7 +348,7 @@
                     </select>
                 </div>
 
-                <div class="bg-white rounded-lg shadow overflow-x-auto">
+                <div class="bg-white rounded-lg shadow overflow-x-auto max-h-[90vh]">
                     <table class="min-w-full">
                         <thead class="bg-gray-50">
                             <tr>
@@ -374,7 +373,7 @@
     <h2 class="text-2xl font-bold text-gray-800 mb-4">Gestión de Entrenadores</h2>
 </div>
 
-<div class="bg-white rounded-lg shadow overflow-x-auto">
+<div class="bg-white rounded-lg shadow overflow-x-auto max-h-[90vh]">
     <table class="min-w-full">
         <thead class="bg-gray-50">
             <tr>
@@ -823,7 +822,7 @@
         </div>
     </div>
 
-    <div id="student-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 fade-in">
+    <div id="student-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 fade-in ">
         <div class="bg-white rounded-lg shadow-xl w-full max-w-md p-6 slide-in max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-gray-800">Agregar Nuevo Alumno</h3>
@@ -1122,14 +1121,14 @@
 
         // Tu configuración de Firebase
        const firebaseConfig = {
-  apiKey: "AIzaSyD4aUaRC5lvHRiOwsQiCtyrWSCCZ6OiopA",
-  authDomain: "taekwondo-system-1f5e1.firebaseapp.com",
-  projectId: "taekwondo-system-1f5e1",
-  storageBucket: "taekwondo-system-1f5e1.firebasestorage.app",
-  messagingSenderId: "358184834741",
-  appId: "1:358184834741:web:da653fe8b791244ab410fc",
-  measurementId: "G-Y1WF0R69VL"
-};
+       apiKey: "AIzaSyD4aUaRC5lvHRiOwsQiCtyrWSCCZ6OiopA",
+       authDomain: "taekwondo-system-1f5e1.firebaseapp.com",
+       projectId: "taekwondo-system-1f5e1",
+       storageBucket: "taekwondo-system-1f5e1.firebasestorage.app",
+       messagingSenderId: "358184834741",
+       appId: "1:358184834741:web:da653fe8b791244ab410fc",
+       measurementId: "G-Y1WF0R69VL"
+       };
 
         // Initialize Firebase
         const app = initializeApp(firebaseConfig);
@@ -1918,7 +1917,9 @@ const historyListContainer = document.getElementById('history-list-container');
             });
         }
 
+        // Botón "Agregar Producto" en la vista principal del POS
         addProductBtnPos.addEventListener('click', () => {
+            currentEditingProductId = null; // Aseguramos que estamos en modo "crear"
             productForm.reset();
             document.getElementById('product-modal-title').textContent = "Agregar Nuevo Producto";
             populateCategoryDropdown(document.getElementById('product-category'));
@@ -1928,14 +1929,26 @@ const historyListContainer = document.getElementById('history-list-container');
         closeProductModalBtn.addEventListener('click', () => productModal.classList.add('hidden'));
 
         // Llena el <select> de categorías en el modal de productos
-        function populateCategoryDropdown(selectElement) {
+        function populateCategoryDropdown(selectElement, selectedValue = null) {
             selectElement.innerHTML = '<option value="">-- Selecciona una categoría --</option>';
+            
             allCategories.forEach(cat => {
-                selectElement.innerHTML += `<option value="${cat.name}">${cat.name}</option>`;
+                const option = document.createElement('option');
+                option.value = cat.name;
+                option.textContent = cat.name;
+                
+                // --- ✨ LÓGICA AÑADIDA AQUÍ ✨ ---
+                // Si el nombre de esta categoría es igual al que queremos seleccionar,
+                // le decimos al navegador que esta es la opción por defecto.
+                if (cat.name === selectedValue) {
+                    option.selected = true;
+                }
+                
+                selectElement.appendChild(option);
             });
         }
 
-        // Formulario para guardar un nuevo producto
+        // Formulario para guardar (Crear O Actualizar) un producto
         productForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const productData = {
@@ -1951,14 +1964,25 @@ const historyListContainer = document.getElementById('history-list-container');
             }
 
             try {
-                await addDoc(collection(db, "products"), productData);
-                alert("Producto agregado con éxito.");
+                // --- ✨ INICIO DE LA MODIFICACIÓN ✨ ---
+                // Si estamos editando (currentEditingProductId tiene un ID), actualizamos.
+                if (currentEditingProductId) {
+                    await updateDoc(doc(db, "products", currentEditingProductId), productData);
+                    alert("Producto actualizado con éxito.");
+                } else {
+                    // Si no, creamos un producto nuevo.
+                    await addDoc(collection(db, "products"), productData);
+                    alert("Producto agregado con éxito.");
+                }
+                // --- ✨ FIN DE LA MODIFICACIÓN ✨ ---
+
                 productModal.classList.add('hidden');
             } catch (error) {
                 console.error("Error al guardar producto:", error);
                 alert("No se pudo guardar el producto.");
             }
         });
+      
       
         // ======== ▼▼ NUEVA FUNCIÓN PARA LLENAR EL FILTRO ▼▼ ========
         function populateInventoryFilterDropdown() {
@@ -2088,67 +2112,69 @@ const historyListContainer = document.getElementById('history-list-container');
         cancelPaymentBtn.addEventListener('click', closePaymentModal);
 
         confirmPaymentBtn.addEventListener('click', async () => {
-            // --- ✨ INICIO DE LA MODIFICACIÓN ✨ ---
-            // 1. Abrimos la ventana emergente INMEDIATAMENTE. Estará en blanco por ahora.
             const printWindow = window.open('', 'Recibo', 'height=500,width=300');
             if (!printWindow) {
                 alert("Por favor, permite las ventanas emergentes para este sitio para poder imprimir recibos.");
                 return;
             }
-            printWindow.document.write('<html><body><p>Procesando pago, por favor espera...</p></body></html>');
-            // --- ✨ FIN DE LA MODIFICACIÓN ✨ ---
-
-            const studentDocRef = doc(db, "students", currentScannedStudentId);
-            const studentDocSnap = await getDoc(studentDocRef);
-            if (!studentDocSnap.exists()) {
-                alert("Error: No se encontró al alumno.");
-                printWindow.close(); // Cerramos la ventana si hay un error
-                return;
-            }
-            
-            const student = studentDocSnap.data();
-            const newClass = changeClassSelect.value;
-            const paymentMethod = paymentMethodSelect.value;
-            const renewalDateValue = renewalDateInput.value;
-            const paymentAmount = parseFloat(renewalAmountInput.value);
-            
-            if (!renewalDateValue || !paymentAmount) {
-                alert("Por favor, completa todos los campos requeridos.");
-                printWindow.close(); // Cerramos la ventana si hay un error
-                return;
-            }
-
-            const dateParts = renewalDateValue.split('-');
-            const newExpirationDate = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-            newExpirationDate.setDate(newExpirationDate.getDate() + 30);
+            printWindow.document.write('<html><body><p>Procesando pago...</p></body></html>');
             
             try {
+                const studentDocRef = doc(db, "students", currentScannedStudentId);
+                const studentDocSnap = await getDoc(studentDocRef);
+                if (!studentDocSnap.exists()) throw new Error("No se encontró al alumno.");
+                
+                const student = studentDocSnap.data();
+                const paymentAmount = parseFloat(renewalAmountInput.value);
+                const paymentDate = new Date(renewalDateInput.value + 'T00:00:00');
+
+                // --- ✨ INICIO DE LA NUEVA LÓGICA DE CÁLCULO ✨ ---
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Hoy a medianoche
+
+                const currentExpirationDate = student.fechaVencimiento.toDate();
+                let baseDateForNewExpiration;
+
+                // Si la fecha de vencimiento actual es en el futuro, usamos esa como base.
+                if (currentExpirationDate > today) {
+                    baseDateForNewExpiration = currentExpirationDate;
+                } else {
+                    // Si ya venció, usamos la fecha del pago como base.
+                    baseDateForNewExpiration = paymentDate;
+                }
+
+                const newExpirationDate = new Date(baseDateForNewExpiration);
+                newExpirationDate.setDate(newExpirationDate.getDate() + 30);
+                // --- ✨ FIN DE LA NUEVA LÓGICA DE CÁLCULO ✨ ---
+
+                if (!renewalDateInput.value || !paymentAmount) {
+                    throw new Error("Por favor, completa todos los campos requeridos.");
+                }
+
                 await updateDoc(studentDocRef, {
-                    clase: newClass,
-                    fechaVencimiento: newExpirationDate,
+                    clase: changeClassSelect.value,
+                    fechaVencimiento: newExpirationDate, // Usamos la nueva fecha calculada
                     ultimoMontoPagado: paymentAmount,
-                    ultimoMetodoPago: paymentMethod
+                    ultimoMetodoPago: paymentMethodSelect.value
                 });
 
                 const paymentsCollectionRef = collection(db, "students", currentScannedStudentId, "pagos");
                 await addDoc(paymentsCollectionRef, {
                     fechaPago: new Date(),
                     monto: paymentAmount,
-                    metodo: paymentMethod,
+                    metodo: paymentMethodSelect.value,
                     tipo: 'Mensualidad',
                     nuevaFechaVencimiento: newExpirationDate
                 });
                 
-                if (confirm(`Pago registrado para ${student.name}.\n\n¿Deseas imprimir un recibo?`)) {
+                if (confirm(`Pago registrado para ${student.name}.\nNueva fecha de vencimiento: ${formatCustomDate(newExpirationDate)}.\n\n¿Deseas imprimir un recibo?`)) {
                     const receiptData = {
                         clientName: student.name,
                         total: paymentAmount,
-                        concept: 'Pago de Mensualualidad'
+                        concept: 'Pago de Mensualidad'
                     };
-                    // 2. En lugar de crear una nueva ventana, usamos la que ya abrimos.
-                    printReceipt(receiptData, printWindow); 
+                    printReceipt(receiptData, printWindow);
                 } else {
-                    // 3. Si el usuario no quiere imprimir, simplemente cerramos la ventana vacía.
                     printWindow.close();
                 }
                 
@@ -2157,8 +2183,8 @@ const historyListContainer = document.getElementById('history-list-container');
 
             } catch (error) {
                 console.error("Error al actualizar el pago:", error);
-                alert("Hubo un error al registrar el pago.");
-                printWindow.close(); // Cerramos la ventana si hay un error
+                alert("Hubo un error al registrar el pago: " + error.message);
+                printWindow.close();
             }
         });
       
@@ -5043,31 +5069,54 @@ function renderProductManagementList() {
     });
 }
 
-// Listener para manejar las acciones de Editar, Guardar y Eliminar
-productManagementList.addEventListener('click', async (e) => {
-    const productItem = e.target.closest('[data-doc-id]');
-    if (!productItem) return;
+// Listener para manejar las acciones de Editar y Eliminar en el modal "Administrar Productos"
+        productManagementList.addEventListener('click', async (e) => {
+            const productItem = e.target.closest('[data-doc-id]');
+            if (!productItem) return;
 
-    const docId = productItem.dataset.docId;
-    const editBtn = e.target.closest('.edit-product-btn');
-    const deleteBtn = e.target.closest('.delete-product-btn');
-    const saveBtn = e.target.closest('.save-product-btn');
+            const docId = productItem.dataset.docId;
+            const editBtn = e.target.closest('.edit-product-btn');
+            const deleteBtn = e.target.closest('.delete-product-btn');
 
-    // Lógica para EDITAR
-    if (editBtn) {
-        const nameSpan = productItem.querySelector('.product-name-text');
-        const currentName = nameSpan.textContent;
-        const flexContainer = productItem.querySelector('.flex-grow');
-        flexContainer.innerHTML = `<input type="text" class="border border-gray-300 rounded-md py-1 px-2 w-full product-name-input" value="${currentName}">`;
-        
-        editBtn.innerHTML = '<i class="fas fa-save"></i>';
-        editBtn.classList.remove('edit-product-btn', 'text-blue-500');
-        editBtn.classList.add('save-product-btn', 'text-green-500');
-        editBtn.title = "Guardar Nombre";
-        productItem.querySelector('.product-name-input').focus();
-    }
+            // --- Lógica para EDITAR (versión mejorada) ---
+            // Ahora abre el modal de formulario completo
+            if (editBtn) {
+                currentEditingProductId = docId; // Guardamos el ID del producto que estamos editando
+                const product = allProducts.find(p => p.id === docId);
 
-    // Lógica para GUARDAR
+                if (product) {
+                    // 1. Llenamos el formulario con los datos existentes del producto
+                    document.getElementById('product-modal-title').textContent = "Editar Producto";
+                    populateCategoryDropdown(document.getElementById('product-category'), product.categoryName);
+                    document.getElementById('product-name').value = product.name;
+                    document.getElementById('product-stock').value = product.stock;
+                    document.getElementById('product-price').value = product.price;
+                    
+                    // 2. Cerramos el modal de "Administrar" y abrimos el de "Formulario"
+                    manageProductsModal.classList.add('hidden');
+                    productModal.classList.remove('hidden');
+                }
+            }
+          
+          
+            
+            // --- Lógica para ELIMINAR (sin cambios) ---
+            if (deleteBtn) {
+                const productName = productItem.querySelector('.product-name-text').textContent;
+                if (confirm(`¿Estás seguro de que quieres eliminar el producto "${productName}"?\nEsta acción no se puede deshacer.`)) {
+                    try {
+                        await deleteDoc(doc(db, "products", docId));
+                        alert("Producto eliminado con éxito.");
+                        // La lista se actualizará sola gracias al listener onSnapshot
+                    } catch (error) {
+                        console.error("Error al eliminar el producto:", error);
+                        alert("No se pudo eliminar el producto.");
+                    }
+                }
+            }
+        });
+
+      // Lógica para GUARDAR
     if (saveBtn) {
         const input = productItem.querySelector('.product-name-input');
         const newName = input.value.trim();
@@ -5082,22 +5131,9 @@ productManagementList.addEventListener('click', async (e) => {
             }
         }
     }
+    
 
-    // Lógica para ELIMINAR
-    if (deleteBtn) {
-        const productName = productItem.querySelector('.product-name-text').textContent;
-        if (confirm(`¿Estás seguro de que quieres eliminar el producto "${productName}"?\nEsta acción no se puede deshacer.`)) {
-            try {
-                await deleteDoc(doc(db, "products", docId));
-                alert("Producto eliminado con éxito.");
-                // La lista se actualizará sola
-            } catch (error) {
-                console.error("Error al eliminar el producto:", error);
-                alert("No se pudo eliminar el producto.");
-            }
-        }
-    }
-});
+    
       
       
       // --- LÓGICA PARA VERIFICACIÓN Y ENVÍO DE NOTIFICACIONES DE CUMPLEAÑOS ---
@@ -5278,25 +5314,26 @@ function printReceipt(receiptData) {
                 body { 
                     font-family: 'Courier New', Courier, monospace; 
                     width: 58mm; 
-                    font-size: 10px;
+                    font-size: 14px;
                     padding: 5px;
                     box-sizing: border-box;
+                    font-weight: bold;
                 }
                 .header { text-align: center; margin-bottom: 10px; }
-                .header h3 { margin: 0; font-size: 14px; }
+                .header h3 { margin: 0; font-size: 18px; }
                 .info p { margin: 2px 0; }
                 table { width: 100%; border-collapse: collapse; }
-                .total { font-weight: bold; font-size: 12px; border-top: 1px dashed black; padding-top: 5px; margin-top: 5px; }
+                .total { font-weight: bold; font-size: 14px; border-top: 1px dashed black; padding-top: 5px; margin-top: 5px; }
             </style>
         </head>
         <body>
             <div class="header">
-                <h3>Taekwondo System</h3>
+                <h3>Escuela de Taekwondo </h3>
                 <p>Gracias por su preferencia</p>
             </div>
             <div class="info">
                 <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-MX')}</p>
-                <p><strong>Cliente:</strong> ${receiptData.clientName}</p>
+                <p><strong>Alumno:</strong> ${receiptData.clientName}</p>
             </div>
             <hr>
             <table>
@@ -5309,7 +5346,8 @@ function printReceipt(receiptData) {
                     <td style="text-align: right;">$${receiptData.total.toFixed(2)}</td>
                 </tr>
             </table>
-            <p style="text-align: center; margin-top: 10px;">¡Vuelva pronto!</p>
+            <p style="text-align: center; margin-top: 10px;">¡Gracias por su preferencia!</p>
+            <p style="text-align: center; margin-top: 10px;">Vuelva pronto</p>
         </body>
         </html>
     `;
