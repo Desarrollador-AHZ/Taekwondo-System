@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es"> 
 <head> 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -506,6 +506,25 @@
                             <i class="fas fa-user-plus text-3xl"></i>
                         </div>
                     </div>
+                   
+                   <div class="bg-white p-6 rounded-2xl shadow-lg md:col-span-2 lg:col-span-3">
+    <h3 class="font-bold text-gray-800 mb-4">Reporte de Pagos de Mensualidad por Periodo</h3>
+    <div class="flex flex-col sm:flex-row items-center gap-4 mb-4 p-4 border rounded-lg bg-gray-50">
+        <div class="flex-1 w-full">
+            <label for="payments-report-start-date" class="block text-sm font-medium text-gray-700">Desde:</label>
+            <input type="date" id="payments-report-start-date" class="w-full mt-1 border-gray-300 rounded-md shadow-sm">
+        </div>
+        <div class="flex-1 w-full">
+            <label for="payments-report-end-date" class="block text-sm font-medium text-gray-700">Hasta:</label>
+            <input type="date" id="payments-report-end-date" class="w-full mt-1 border-gray-300 rounded-md shadow-sm">
+        </div>
+        <button id="generate-payments-report-btn" class="w-full sm:w-auto bg-blue-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-700 transition self-end">
+            Generar
+        </button>
+    </div>
+    <div id="payments-report-results" class="space-y-2 text-sm max-h-96 overflow-y-auto">
+        </div>
+</div>
                     
                     <div class="bg-white p-6 rounded-2xl shadow-lg md:col-span-1 lg:col-span-1">
                         <h3 class="font-semibold text-gray-700 mb-4">Estado de Alumnos</h3>
@@ -1182,6 +1201,8 @@
         let currentEditingExpenseId = null;
         let cart = []; // Carrito de la venta actual
         let currentEditingVideoId = null;
+        const ACCESS_RESULT_TIMEOUT = 4000; // Tiempo en milisegundos (4 segundos)
+        let accessResultTimer = null; // Para guardar el temporizador
 
         const successSound = new Audio('Acceso_Concedido.mp3');
         const errorSound = new Audio('Acceso_Denegado.mp3');
@@ -1574,6 +1595,11 @@ const historyListContainer = document.getElementById('history-list-container');
             }
             
             accessResultView.classList.remove('hidden');
+            // Limpiamos cualquier temporizador anterior y creamos uno nuevo
+            clearTimeout(accessResultTimer);
+            accessResultTimer = setTimeout(() => {
+                resetToScannerView();
+            }, ACCESS_RESULT_TIMEOUT);
         }
 
         function startScanner() {
@@ -1629,11 +1655,21 @@ const historyListContainer = document.getElementById('history-list-container');
 
         function resetToScannerView() {
             stopScanner();
+       // Limpiamos el temporizador por si se llama a esta función desde otro lugar
+            if (accessResultTimer) {
+                clearTimeout(accessResultTimer);
+            }
             accessResultView.classList.add('hidden');
             cameraView.classList.add('hidden');
             scannerMainView.classList.remove('hidden');
+            accessInput.focus(); // Ponemos el foco en el input para el siguiente alumno
         }
-        backToScannerBtn.addEventListener('click', resetToScannerView);
+        backToScannerBtn.addEventListener('click', () => {
+            // --- ✨ MODIFICACIÓN ✨ ---
+            // No necesitamos el temporizador si el usuario hace clic manualmente
+            clearTimeout(accessResultTimer); 
+            resetToScannerView();
+        });
 
         const allViews = document.querySelectorAll('#main-content > div');
         const navItems = document.querySelectorAll('.nav-item');
@@ -2188,6 +2224,24 @@ const historyListContainer = document.getElementById('history-list-container');
             }
         });
       
+      // --- FUNCIÓN REUTILIZABLE PARA ABRIR EL MODAL DE PAGO ---
+        async function openPaymentModalForStudent(studentId) {
+            const studentDocRef = doc(db, "students", studentId);
+            const studentDocSnap = await getDoc(studentDocRef);
+
+            if (studentDocSnap.exists()) {
+                currentScannedStudentId = studentId; // Asignamos el ID del alumno que estamos procesando
+                const student = studentDocSnap.data();
+                paymentStudentName.textContent = student.name;
+                renewalAmountInput.value = student.ultimoMontoPagado || 600;
+                populateClassDropdowns(changeClassSelect, student.clase);
+                renewalDateInput.value = new Date().toISOString().split('T')[0];
+                paymentModal.classList.remove('hidden');
+            } else {
+                alert("Error: No se encontró al alumno para renovar el pago.");
+            }
+        }
+      
       
     // --- Lógica de Gestión de Ejercicios ---
     function listenForExerciseChanges() {
@@ -2710,39 +2764,48 @@ viewPaymentHistoryBtn.addEventListener('click', async () => {
         }
 
         studentTableBody.addEventListener('click', async function(e) {
-    const viewButton = e.target.closest('.student-row');
-    const deleteButton = e.target.closest('.delete-student-row-btn');
+            // Buscamos cuál de los tres botones específicos se presionó
+            const renewButton = e.target.closest('.renew-payment-row-btn');
+            const deleteButton = e.target.closest('.delete-student-row-btn');
+            const viewButton = e.target.closest('.view-student-row-btn');
 
-    if (deleteButton) {
-        e.stopPropagation(); // Evita que se abra el modal de ver info
-        const studentId = deleteButton.getAttribute('data-id');
-        const studentName = deleteButton.closest('tr').querySelector('.font-medium').textContent;
+            // --- LÓGICA CORREGIDA Y REORDENADA ---
+            // Le damos prioridad a los botones de acción específicos
 
-        if (confirm(`¿Estás seguro de que quieres eliminar a "${studentName}"?\n\nEsta acción no se puede deshacer.`)) {
-            try {
-                // Paso 1: Eliminar el historial de pagos en la subcolección
-                const paymentsRef = collection(db, "students", studentId, "pagos");
-                const paymentsSnapshot = await getDocs(paymentsRef);
-                const deletePromises = [];
-                paymentsSnapshot.forEach((doc) => {
-                    deletePromises.push(deleteDoc(doc.ref));
-                });
-                await Promise.all(deletePromises);
+            if (renewButton) {
+                // 1. Si se hizo clic en RENOVAR
+                e.stopPropagation(); // Evita que se activen otros clics
+                const studentId = renewButton.dataset.id;
+                openPaymentModalForStudent(studentId);
 
-                // Paso 2: Eliminar el documento principal del alumno
-                await deleteDoc(doc(db, "students", studentId));
+            } else if (deleteButton) {
+                // 2. Si se hizo clic en ELIMINAR
+                e.stopPropagation(); 
+                const studentId = deleteButton.dataset.id;
+                const studentName = deleteButton.closest('tr').querySelector('.font-medium').textContent;
 
-                alert(`Alumno "${studentName}" eliminado con éxito.`);
-            } catch (error) {
-                console.error("Error al eliminar alumno:", error);
-                alert("Hubo un error al intentar eliminar al alumno.");
+                if (confirm(`¿Estás seguro de que quieres eliminar a "${studentName}"?\n\nEsta acción no se puede deshacer.`)) {
+                    try {
+                        const paymentsRef = collection(db, "students", studentId, "pagos");
+                        const paymentsSnapshot = await getDocs(paymentsRef);
+                        const deletePromises = [];
+                        paymentsSnapshot.forEach((doc) => {
+                            deletePromises.push(deleteDoc(doc.ref));
+                        });
+                        await Promise.all(deletePromises);
+                        await deleteDoc(doc(db, "students", studentId));
+                        alert(`Alumno "${studentName}" eliminado con éxito.`);
+                    } catch (error) {
+                        console.error("Error al eliminar alumno:", error);
+                        alert("Hubo un error al intentar eliminar al alumno.");
+                    }
+                }
+            } else if (viewButton) {
+                // 3. Si se hizo clic en VER DETALLES
+                const studentId = viewButton.dataset.id;
+                openViewModal(studentId);
             }
-        }
-    } else if (viewButton) {
-        const studentId = viewButton.getAttribute('data-id');
-        openViewModal(studentId);
-    }
-});
+        });
 
         closeViewStudentModalBtn.addEventListener('click', () => viewStudentModal.classList.add('hidden'));
 
@@ -2917,10 +2980,10 @@ viewPaymentHistoryBtn.addEventListener('click', async () => {
       
         function renderStudentTable(studentsToRender) {
             const studentTableBody = document.getElementById('student-table-body');
-            studentTableBody.innerHTML = ''; // Limpiar la tabla antes de dibujar
+            studentTableBody.innerHTML = ''; 
 
             studentsToRender.forEach((student) => {
-                const studentName = student.name || student.nombre;
+                const studentName = student.name || 'N/A';
                 if (!studentName) return;
 
                 const expirationDate = student.fechaVencimiento.toDate();
@@ -2928,11 +2991,8 @@ viewPaymentHistoryBtn.addEventListener('click', async () => {
                 today.setHours(0, 0, 0, 0);
                 const isExpired = expirationDate < today;
 
-                const avatarColor = student.rol === 'admin' ? 'bg-blue-500' : 'bg-gray-400';
-                const initials = studentName.substring(0, 2).toUpperCase();
-
                 const newRow = document.createElement('tr');
-                newRow.className = 'student-row hover:bg-gray-50';
+                newRow.className = 'student-row'; // La clase se mantiene pero ya no se usará para el clic principal
                 newRow.setAttribute('data-id', student.id);
                 
                 const beltName = student.cinta || 'N/A';
@@ -2942,9 +3002,6 @@ viewPaymentHistoryBtn.addEventListener('click', async () => {
                     <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-900 font-semibold">${student.numericId || 'N/A'}</td>
                     <td class="px-4 py-3 whitespace-nowrap">
                         <div class="flex items-center">
-                            <div class="w-8 h-8 rounded-full ${avatarColor} text-white flex items-center justify-center font-bold text-sm mr-3 flex-shrink-0">
-                                ${initials}
-                            </div>
                             <span class="text-sm font-medium text-gray-900">${studentName}</span>
                         </div>
                     </td>
@@ -2956,12 +3013,13 @@ viewPaymentHistoryBtn.addEventListener('click', async () => {
                     </td>
                     <td class="px-4 py-3 whitespace-nowrap">
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${isExpired ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
-                            ${isExpired ? 'Vencida' : 'Activa'}
+                            ${isExpired ? 'Vencido' : 'Activo'}
                         </span>
                     </td>
-                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium space-x-3">
-                        <button class="text-red-600 hover:text-red-900 edit-student-row-btn" data-id="${student.id}"><i class="fas fa-edit"></i></button>
-                        <button class="text-gray-600 hover:text-gray-900 delete-student-row-btn" data-id="${student.id}"><i class="fas fa-trash"></i></button>
+                    <td class="px-4 py-3 whitespace-nowrap text-sm font-medium space-x-4">
+                        <button class="text-gray-600 hover:text-blue-600 view-student-row-btn" data-id="${student.id}" title="Ver Detalles"><i class="fas fa-eye"></i></button>
+                        <button class="text-gray-600 hover:text-green-600 renew-payment-row-btn" data-id="${student.id}" title="Renovar Mensualidad"><i class="fas fa-dollar-sign"></i></button>
+                        <button class="text-gray-600 hover:text-red-600 delete-student-row-btn" data-id="${student.id}" title="Eliminar Alumno"><i class="fas fa-trash"></i></button>
                     </td>
                 `;
                 studentTableBody.appendChild(newRow);
@@ -3593,6 +3651,98 @@ closeExerciseDetailModalBtn.addEventListener('click', () => {
             });
             return { active, expired };
         }
+      
+      
+// --- FUNCIÓN PARA GENERAR EL REPORTE DETALLADO DE PAGOS ---
+
+async function generatePaymentsReport() {
+    const startDateInput = document.getElementById('payments-report-start-date');
+    const endDateInput = document.getElementById('payments-report-end-date');
+    const resultsContainer = document.getElementById('payments-report-results');
+
+    if (!startDateInput.value || !endDateInput.value) {
+        alert("Por favor, selecciona una fecha de inicio y una de fin.");
+        return;
+    }
+
+    const startDate = new Date(startDateInput.value + 'T00:00:00');
+    const endDate = new Date(endDateInput.value + 'T23:59:59');
+
+    if (endDate < startDate) {
+        alert("La fecha de fin no puede ser anterior a la de inicio.");
+        return;
+    }
+
+    resultsContainer.innerHTML = '<p class="text-center text-gray-500">Buscando pagos...</p>';
+    
+    try {
+        let paymentsList = [];
+        const studentPromises = allStudents.map(async (student) => {
+            const paymentsRef = collection(db, "students", student.id, "pagos");
+            const q = query(paymentsRef, where("fechaPago", ">=", startDate), where("fechaPago", "<=", endDate));
+            
+            const paymentsSnapshot = await getDocs(q);
+            paymentsSnapshot.forEach(doc => {
+                const payment = doc.data();
+                paymentsList.push({
+                    studentName: student.name,
+                    amount: payment.monto,
+                    date: payment.fechaPago.toDate()
+                });
+            });
+        });
+
+        await Promise.all(studentPromises);
+
+        if (paymentsList.length === 0) {
+            resultsContainer.innerHTML = '<p class="text-center text-gray-600 font-semibold">No se encontraron pagos en el periodo seleccionado.</p>';
+            return;
+        }
+
+        // Ordenar los pagos por fecha
+        paymentsList.sort((a, b) => a.date - b.date);
+
+        let totalAmount = 0;
+        let reportHtml = `
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Alumno</th>
+                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Fecha de Pago</th>
+                        <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Monto</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+        `;
+
+        paymentsList.forEach(payment => {
+            totalAmount += payment.amount;
+            reportHtml += `
+                <tr>
+                    <td class="px-4 py-2 whitespace-nowrap">${payment.studentName}</td>
+                    <td class="px-4 py-2 whitespace-nowrap">${payment.date.toLocaleDateString('es-MX')}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-right font-medium">$${payment.amount.toFixed(2)}</td>
+                </tr>
+            `;
+        });
+
+        reportHtml += `
+                </tbody>
+            </table>
+            <div class="mt-4 p-4 bg-gray-100 rounded-lg text-right">
+                <span class="font-bold text-lg">TOTAL DEL PERIODO:</span>
+                <span class="font-bold text-lg text-green-600 ml-4">$${totalAmount.toFixed(2)}</span>
+            </div>
+        `;
+
+        resultsContainer.innerHTML = reportHtml;
+
+    } catch (error) {
+        console.error("Error al generar reporte de pagos:", error);
+        resultsContainer.innerHTML = '<p class="text-center text-red-500">Ocurrió un error al generar el reporte.</p>';
+    }
+}
+      
 
         // Función para contar nuevos alumnos del mes 
         function countNewStudentsThisMonth() {
@@ -4770,6 +4920,7 @@ function initializePosReports() {
             const prevWeekBtn = document.getElementById('prev-week-btn');
             const nextWeekBtn = document.getElementById('next-week-btn');
             const thisWeekBtn = document.getElementById('this-week-btn');
+            
 
             // --- Lógica de cálculo y actualización ---
             const updateWeeklyReport = async () => {
@@ -4837,6 +4988,12 @@ function initializePosReports() {
             
             // Cargar la semana actual al iniciar
             setWeekPickers(new Date()); 
+          
+  // --- ✨ Event listener para botón generar reporte de mensualidades ✨ ---
+            const generatePaymentsReportBtn = document.getElementById('generate-payments-report-btn');
+            if (generatePaymentsReportBtn) { // Verificamos que el botón exista
+                generatePaymentsReportBtn.addEventListener('click', generatePaymentsReport);
+            }
         }
       
       
@@ -5328,7 +5485,7 @@ function printReceipt(receiptData) {
         </head>
         <body>
             <div class="header">
-                <h3>Escuela de Taekwondo </h3>
+                <h3>Escuela de Taekwondo System</h3>
                 <p>Gracias por su preferencia</p>
             </div>
             <div class="info">
